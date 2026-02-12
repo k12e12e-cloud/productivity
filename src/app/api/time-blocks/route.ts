@@ -49,6 +49,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid blockType" }, { status: 400 });
     }
 
+    // Overlap check
+    const existing = getTimeBlocksByDate(body.date);
+    const overlapping = existing.find(
+      (b) => body.startTime < b.endTime && body.endTime > b.startTime
+    );
+    if (overlapping) {
+      return NextResponse.json(
+        { error: `시간이 겹칩니다: ${overlapping.label} (${overlapping.startTime}-${overlapping.endTime})` },
+        { status: 409 }
+      );
+    }
+
     const block = createTimeBlock({ ...body, label: body.label.trim() });
     return NextResponse.json(block, { status: 201 });
   } catch (error) {

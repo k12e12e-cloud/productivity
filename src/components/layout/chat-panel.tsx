@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { MessageCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -9,6 +10,10 @@ import { ChatInput } from "@/components/inbox/chat-input";
 
 export function ChatPanel() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+
+  // Hide on inbox page — it has its own full chat UI
+  if (pathname === "/inbox") return null;
 
   return (
     <>

@@ -12,9 +12,11 @@ export function extractClassification(
     const classification = parsed.classification;
     if (!classification) return null;
 
+    const validStatuses = ["BACKLOG", "TODAY", "IN_PROGRESS", "DONE"];
     return {
       title: classification.title,
       priority: classification.priority,
+      status: validStatuses.includes(classification.status) ? classification.status : undefined,
       contextTags: classification.contextTags ?? [],
       timeEstimateMinutes: classification.timeEstimateMinutes ?? 60,
       blockType: classification.blockType ?? "deep",

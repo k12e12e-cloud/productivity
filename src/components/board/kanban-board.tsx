@@ -12,7 +12,7 @@ import {
   type DragEndEvent,
   type DragOverEvent,
 } from "@dnd-kit/core";
-import { arrayMove } from "@dnd-kit/sortable";
+
 import { KanbanColumn } from "./kanban-column";
 import { TaskCard } from "./task-card";
 import { TaskDetailDialog } from "./task-detail-dialog";
@@ -23,8 +23,23 @@ import { useTasks } from "@/hooks/use-tasks";
 import { KANBAN_COLUMNS } from "@/lib/constants";
 import type { Task, TaskStatus } from "@/types";
 
-export function KanbanBoard() {
-  const { tasks, updateTask, createTask } = useTasks();
+interface KanbanBoardProps {
+  filterTags?: string[];
+  filterProjectId?: string;
+}
+
+export function KanbanBoard({ filterTags = [], filterProjectId = "" }: KanbanBoardProps) {
+  const { tasks: allTasks, updateTask, createTask } = useTasks();
+
+  const tasks = allTasks.filter((t) => {
+    if (filterTags.length > 0 && !filterTags.some((tag) => t.contextTags?.includes(tag))) {
+      return false;
+    }
+    if (filterProjectId && t.projectId !== filterProjectId) {
+      return false;
+    }
+    return true;
+  });
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -70,20 +85,69 @@ export function KanbanBoard() {
 
       // Determine target column: over.id could be a column ID or a task ID
       let targetStatus: TaskStatus;
+      let overTaskIndex = -1;
       const overTask = tasks.find((t) => t.id === over.id);
       if (overTask) {
         targetStatus = overTask.status;
+        const columnTasks = tasks.filter((t) => t.status === targetStatus);
+        overTaskIndex = columnTasks.findIndex((t) => t.id === over.id);
       } else if (KANBAN_COLUMNS.includes(over.id as TaskStatus)) {
         targetStatus = over.id as TaskStatus;
       } else {
         return;
       }
 
-      if (task.status !== targetStatus) {
+      const statusChanged = task.status !== targetStatus;
+      const columnTasks = tasks.filter(
+        (t) => t.status === targetStatus && t.id !== taskId
+      );
+
+      // Calculate new sortOrder
+      let newSortOrder: number;
+      if (overTaskIndex >= 0) {
+        // Dropped on a specific task — insert at that position
+        const sorted = columnTasks.sort((a, b) => a.sortOrder - b.sortOrder);
+        if (overTaskIndex === 0) {
+          newSortOrder = (sorted[0]?.sortOrder ?? 1) - 1;
+        } else if (overTaskIndex >= sorted.length) {
+          newSortOrder = (sorted[sorted.length - 1]?.sortOrder ?? 0) + 1;
+        } else {
+          newSortOrder = Math.floor(
+            (sorted[overTaskIndex - 1].sortOrder + sorted[overTaskIndex].sortOrder) / 2
+          );
+          // If collision, reindex the whole column
+          if (
+            newSortOrder === sorted[overTaskIndex - 1].sortOrder ||
+            newSortOrder === sorted[overTaskIndex].sortOrder
+          ) {
+            newSortOrder = overTaskIndex;
+            // Reindex all tasks in column
+            const reindexPromises = sorted.map((t, i) => {
+              const order = i >= overTaskIndex ? i + 1 : i;
+              if (t.sortOrder !== order) {
+                return updateTask(t.id, { sortOrder: order });
+              }
+            });
+            Promise.all(reindexPromises.filter(Boolean));
+          }
+        }
+      } else {
+        // Dropped on empty column or column header — append at end
+        const sorted = columnTasks.sort((a, b) => a.sortOrder - b.sortOrder);
+        newSortOrder = (sorted[sorted.length - 1]?.sortOrder ?? 0) + 1;
+      }
+
+      const updates: Partial<{ status: TaskStatus; sortOrder: number }> = {
+        sortOrder: newSortOrder,
+      };
+      if (statusChanged) {
+        updates.status = targetStatus;
+      }
+
+      if (statusChanged || task.sortOrder !== newSortOrder) {
         try {
-          await updateTask(taskId, { status: targetStatus });
+          await updateTask(taskId, updates);
         } catch (e) {
-          // WIP limit or other error - revert handled by useTasks
           alert(e instanceof Error ? e.message : "이동 실패");
         }
       }

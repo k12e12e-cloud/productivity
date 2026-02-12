@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useTasks } from "@/hooks/use-tasks";
+import { useProjects } from "@/hooks/use-projects";
 import { KANBAN_COLUMNS, STATUS_LABELS } from "@/lib/constants";
 import type { Task, Priority, TaskStatus } from "@/types";
 import { Trash2, Loader2 } from "lucide-react";
@@ -34,10 +35,12 @@ export function TaskDetailDialog({
   onOpenChange,
 }: TaskDetailDialogProps) {
   const { updateTask, deleteTask } = useTasks();
+  const { projects } = useProjects();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<Priority>("P1");
   const [status, setStatus] = useState<TaskStatus>("BACKLOG");
+  const [projectId, setProjectId] = useState<string>("");
   const [dueDate, setDueDate] = useState("");
   const [timeEstimate, setTimeEstimate] = useState("");
   const [error, setError] = useState("");
@@ -50,6 +53,7 @@ export function TaskDetailDialog({
       setDescription(task.description ?? "");
       setPriority(task.priority);
       setStatus(task.status);
+      setProjectId(task.projectId ?? "");
       setDueDate(task.dueDate ?? "");
       setTimeEstimate(task.timeEstimateMinutes?.toString() ?? "");
       setError("");
@@ -80,6 +84,7 @@ export function TaskDetailDialog({
         description: description || null,
         priority,
         status,
+        projectId: projectId || null,
         dueDate: dueDate || null,
         timeEstimateMinutes: timeEstimate ? parseInt(timeEstimate) : null,
       });
@@ -163,6 +168,28 @@ export function TaskDetailDialog({
               </Select>
             </div>
           </div>
+
+          {projects.length > 0 && (
+            <div>
+              <label className="text-xs text-muted-foreground">프로젝트</label>
+              <Select
+                value={projectId || "_none"}
+                onValueChange={(v) => setProjectId(v === "_none" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="프로젝트 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">없음</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>

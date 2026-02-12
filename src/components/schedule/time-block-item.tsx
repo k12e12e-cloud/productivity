@@ -3,7 +3,8 @@
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { TimeBlock } from "@/types";
+import { PriorityBadge } from "@/components/shared/priority-badge";
+import type { TimeBlock, Task } from "@/types";
 
 const BLOCK_COLORS = {
   deep: "bg-blue-500/20 border-blue-500/40 text-blue-300",
@@ -13,10 +14,11 @@ const BLOCK_COLORS = {
 
 interface TimeBlockItemProps {
   block: TimeBlock;
+  task?: Task;
   onDelete: (id: string) => void;
 }
 
-export function TimeBlockItem({ block, onDelete }: TimeBlockItemProps) {
+export function TimeBlockItem({ block, task, onDelete }: TimeBlockItemProps) {
   const [startH, startM] = block.startTime.split(":").map(Number);
   const [endH, endM] = block.endTime.split(":").map(Number);
   const durationMinutes = endH * 60 + endM - (startH * 60 + startM);
@@ -39,8 +41,19 @@ export function TimeBlockItem({ block, onDelete }: TimeBlockItemProps) {
       <div className="flex items-start justify-between">
         <div className="min-w-0">
           <span className="font-medium">{block.label}</span>
+          {task && (
+            <span className="ml-1.5 inline-flex items-center gap-1">
+              <PriorityBadge priority={task.priority} />
+              {task.status === "DONE" && (
+                <span className="text-[10px] text-green-400">완료</span>
+              )}
+            </span>
+          )}
           <div className="text-[10px] opacity-70">
             {block.startTime} - {block.endTime}
+            {task?.timeEstimateMinutes && (
+              <span className="ml-1">({task.timeEstimateMinutes}분)</span>
+            )}
           </div>
         </div>
         <Button

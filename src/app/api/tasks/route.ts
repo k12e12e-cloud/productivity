@@ -38,6 +38,9 @@ export async function POST(request: NextRequest) {
     if (body.timeEstimateMinutes != null && (typeof body.timeEstimateMinutes !== "number" || body.timeEstimateMinutes < 0 || body.timeEstimateMinutes > 1440)) {
       return NextResponse.json({ error: "timeEstimateMinutes must be 0-1440" }, { status: 400 });
     }
+    if (body.blockType && !["deep", "shallow"].includes(body.blockType)) {
+      return NextResponse.json({ error: "blockType must be 'deep' or 'shallow'" }, { status: 400 });
+    }
 
     const task = createTask({ ...body, title: body.title.trim() });
     return NextResponse.json(task, { status: 201 });

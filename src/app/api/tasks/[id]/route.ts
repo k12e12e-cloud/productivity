@@ -47,6 +47,9 @@ export async function PATCH(
     if (body.timeEstimateMinutes != null && (typeof body.timeEstimateMinutes !== "number" || body.timeEstimateMinutes < 0 || body.timeEstimateMinutes > 1440)) {
       return NextResponse.json({ error: "timeEstimateMinutes must be 0-1440" }, { status: 400 });
     }
+    if (body.blockType && !["deep", "shallow"].includes(body.blockType)) {
+      return NextResponse.json({ error: "blockType must be 'deep' or 'shallow'" }, { status: 400 });
+    }
 
     // WIP limit check
     if (body.status === "IN_PROGRESS") {

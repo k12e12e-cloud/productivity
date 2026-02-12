@@ -42,6 +42,7 @@ export interface InboxItem {
 export interface ClassificationResult {
   title: string;
   priority: Priority;
+  status?: TaskStatus;
   contextTags: string[];
   timeEstimateMinutes: number;
   blockType: "deep" | "shallow";

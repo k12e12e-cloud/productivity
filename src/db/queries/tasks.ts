@@ -94,15 +94,15 @@ export function countTasksByStatus(status: TaskStatus) {
 }
 
 export function getTasksDueSoon(days: number = 7) {
-  const now = new Date();
-  const future = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+  const future = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  const futureDate = future.toISOString().split("T")[0]; // "YYYY-MM-DD"
   return db
     .select()
     .from(schema.tasks)
     .where(
       and(
         sql`${schema.tasks.dueDate} IS NOT NULL`,
-        sql`${schema.tasks.dueDate} <= ${future.toISOString()}`,
+        sql`${schema.tasks.dueDate} <= ${futureDate}`,
         sql`${schema.tasks.status} != 'DONE'`
       )
     )

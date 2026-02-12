@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAnthropicClient } from "@/lib/anthropic";
+import { chatStream } from "@/lib/anthropic";
 import { CLASSIFY_SYSTEM_PROMPT } from "@/lib/prompts";
 import { extractClassification } from "@/lib/classify";
 import { getChatMessages, createChatMessage } from "@/db/queries/chat";
@@ -40,35 +40,57 @@ export async function POST(request: NextRequest) {
     content: m.content,
   }));
 
-  const client = getAnthropicClient();
-
   // Create SSE stream
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       let fullResponse = "";
+      let closed = false;
+
+      function send(chunk: Uint8Array) {
+        if (!closed) {
+          try { controller.enqueue(chunk); } catch { closed = true; }
+        }
+      }
+      function close() {
+        if (!closed) {
+          try { controller.close(); } catch { /* already closed */ }
+          closed = true;
+        }
+      }
 
       try {
-        const response = await client.messages.create({
-          model: "claude-sonnet-4-5-20250929",
-          max_tokens: 1024,
-          system: CLASSIFY_SYSTEM_PROMPT,
-          messages: conversationHistory,
-          stream: true,
-        });
+        const body = await chatStream(CLASSIFY_SYSTEM_PROMPT, conversationHistory);
+        const reader = body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-        for await (const event of response) {
-          if (
-            event.type === "content_block_delta" &&
-            event.delta.type === "text_delta"
-          ) {
-            const text = event.delta.text;
-            fullResponse += text;
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: "text_delta", text })}\n\n`
-              )
-            );
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop()!;
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data: ")) continue;
+            const payload = trimmed.slice(6);
+            if (payload === "[DONE]") continue;
+
+            try {
+              const json = JSON.parse(payload);
+              const text = json.choices?.[0]?.delta?.content;
+              if (text) {
+                fullResponse += text;
+                send(encoder.encode(
+                  `data: ${JSON.stringify({ type: "text_delta", text })}\n\n`
+                ));
+              }
+            } catch {
+              // skip malformed chunks
+            }
           }
         }
 
@@ -84,6 +106,7 @@ export async function POST(request: NextRequest) {
           const task = createTask({
             title: classification.title,
             priority: classification.priority,
+            status: classification.status,
             contextTags: classification.contextTags,
             timeEstimateMinutes: classification.timeEstimateMinutes,
             blockType: classification.blockType,
@@ -95,25 +118,21 @@ export async function POST(request: NextRequest) {
             taskId: task.id,
           });
 
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ type: "task_created", task })}\n\n`
-            )
-          );
+          send(encoder.encode(
+            `data: ${JSON.stringify({ type: "task_created", task })}\n\n`
+          ));
         }
 
-        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        send(encoder.encode("data: [DONE]\n\n"));
       } catch (error) {
         console.error("Chat API error:", error);
         const errorMsg =
           error instanceof Error ? error.message : "Unknown error";
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ type: "error", error: errorMsg })}\n\n`
-          )
-        );
+        send(encoder.encode(
+          `data: ${JSON.stringify({ type: "error", error: errorMsg })}\n\n`
+        ));
       } finally {
-        controller.close();
+        close();
       }
     },
   });

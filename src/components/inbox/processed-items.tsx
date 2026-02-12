@@ -1,8 +1,10 @@
 "use client";
 
 import useSWR from "swr";
+import Link from "next/link";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PriorityBadge } from "@/components/shared/priority-badge";
+import { ArrowRight } from "lucide-react";
 import type { InboxItem } from "@/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -42,6 +44,17 @@ export function ProcessedItems() {
                     <span className="truncate">
                       {(item.classificationResult as { title: string }).title}
                     </span>
+                    {item.taskId ? (
+                      <Link
+                        href="/board"
+                        className="ml-auto shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                        title="칸반 보드에서 보기"
+                      >
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    ) : (
+                      <span className="ml-auto text-[10px] text-muted-foreground/50">삭제됨</span>
+                    )}
                   </div>
                 )}
               </div>

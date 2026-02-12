@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAnthropicClient } from "@/lib/anthropic";
+import { chatComplete } from "@/lib/anthropic";
 import { SCHEDULE_SYSTEM_PROMPT } from "@/lib/prompts";
 import { extractSchedule } from "@/lib/classify";
 import { getTasksByStatus } from "@/db/queries/tasks";
@@ -12,11 +12,12 @@ export async function POST(request: NextRequest) {
   const { date } = await request.json();
   const targetDate = date || new Date().toISOString().split("T")[0];
 
-  // Get today's tasks (TODAY + IN_PROGRESS)
+  // Get today's tasks (TODAY + IN_PROGRESS), sorted by priority
+  const priorityOrder: Record<string, number> = { P0: 0, P1: 1, P2: 2 };
   const todayTasks = [
     ...getTasksByStatus("TODAY"),
     ...getTasksByStatus("IN_PROGRESS"),
-  ];
+  ].sort((a, b) => (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9));
 
   if (todayTasks.length === 0) {
     return NextResponse.json(
@@ -32,23 +33,14 @@ export async function POST(request: NextRequest) {
     )
     .join("\n");
 
-  const client = getAnthropicClient();
-
   try {
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 1024,
-      system: SCHEDULE_SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `오늘(${targetDate}) 처리할 태스크:\n${taskList}\n\n최적의 타임블록 스케줄을 JSON으로 생성해주세요.`,
-        },
-      ],
-    });
+    const text = await chatComplete(SCHEDULE_SYSTEM_PROMPT, [
+      {
+        role: "user",
+        content: `오늘(${targetDate}) 처리할 태스크:\n${taskList}\n\n최적의 타임블록 스케줄을 JSON으로 생성해주세요.`,
+      },
+    ]);
 
-    const text =
-      response.content[0].type === "text" ? response.content[0].text : "";
     const schedule = extractSchedule(text);
 
     if (!schedule) {
