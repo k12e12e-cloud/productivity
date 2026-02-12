@@ -50,6 +50,16 @@ export interface ClassificationResult {
   reasoning: string;
 }
 
+export interface TaskUpdateAction {
+  taskId: string;
+  title?: string;
+  priority?: Priority;
+  status?: TaskStatus;
+  projectSuggestion?: string;
+  dueDate?: string;
+  contextTags?: string[];
+}
+
 export interface TimeBlock {
   id: string;
   date: string;

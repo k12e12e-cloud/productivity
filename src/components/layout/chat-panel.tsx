@@ -28,6 +28,14 @@ export function ChatPanel() {
         </Button>
       )}
 
+      {/* Backdrop */}
+      {open && (
+        <div
+          className="fixed inset-0 z-30"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
       {/* Panel */}
       <div
         className={cn(

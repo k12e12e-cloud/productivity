@@ -56,6 +56,11 @@ function initTables(sqlite: InstanceType<typeof Database>) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_timeblocks_date_start ON time_blocks(date, start_time);
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS chat_messages (
       id TEXT PRIMARY KEY,
       role TEXT NOT NULL,

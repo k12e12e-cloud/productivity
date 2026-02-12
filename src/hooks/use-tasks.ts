@@ -9,6 +9,7 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 export function useTasks() {
   const { data: tasks, mutate } = useSWR<Task[]>("/api/tasks", fetcher, {
     fallbackData: [],
+    refreshInterval: 5000,
   });
 
   const createTask = useCallback(

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { chatStream } from "@/lib/anthropic";
-import { CLASSIFY_SYSTEM_PROMPT } from "@/lib/prompts";
-import { extractClassification } from "@/lib/classify";
+import { buildClassifyPrompt } from "@/lib/prompts";
+import { extractClassification, extractTaskUpdates } from "@/lib/classify";
 import { getChatMessages, createChatMessage } from "@/db/queries/chat";
-import { createTask } from "@/db/queries/tasks";
+import { createTask, getAllTasks, updateTask, getTaskById } from "@/db/queries/tasks";
 import { createInboxItem, updateInboxItem } from "@/db/queries/inbox";
+import { getAllProjects, createProject } from "@/db/queries/projects";
 
 export async function GET() {
   try {
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       let fullResponse = "";
+      let usage: { prompt_tokens: number; completion_tokens: number } | null = null;
       let closed = false;
 
       function send(chunk: Uint8Array) {
@@ -60,7 +62,12 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        const body = await chatStream(CLASSIFY_SYSTEM_PROMPT, conversationHistory);
+        // Build prompt with existing projects and tasks
+        const projects = getAllProjects();
+        const activeTasks = getAllTasks().filter((t) => t.status !== "DONE");
+        const systemPrompt = buildClassifyPrompt(projects, activeTasks);
+
+        const body = await chatStream(systemPrompt, conversationHistory);
         const reader = body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
@@ -88,21 +95,46 @@ export async function POST(request: NextRequest) {
                   `data: ${JSON.stringify({ type: "text_delta", text })}\n\n`
                 ));
               }
+              if (json.usage) {
+                usage = {
+                  prompt_tokens: json.usage.prompt_tokens,
+                  completion_tokens: json.usage.completion_tokens,
+                };
+              }
             } catch {
               // skip malformed chunks
             }
           }
         }
 
-        // Save assistant message
+        // Save assistant message with usage metadata
         createChatMessage({
           role: "assistant",
           content: fullResponse,
+          metadata: usage ? { usage } : undefined,
         });
 
         // Try to extract classification and create task
         const classification = extractClassification(fullResponse);
         if (classification) {
+          // Resolve project: match existing or create new
+          let projectId: string | undefined;
+          if (classification.projectSuggestion) {
+            const match = projects.find(
+              (p) =>
+                p.name.toLowerCase() ===
+                classification.projectSuggestion!.toLowerCase()
+            );
+            if (match) {
+              projectId = match.id;
+            } else {
+              const newProject = createProject({
+                name: classification.projectSuggestion,
+              });
+              projectId = newProject.id;
+            }
+          }
+
           const task = createTask({
             title: classification.title,
             priority: classification.priority,
@@ -110,6 +142,7 @@ export async function POST(request: NextRequest) {
             contextTags: classification.contextTags,
             timeEstimateMinutes: classification.timeEstimateMinutes,
             blockType: classification.blockType,
+            projectId,
           });
 
           updateInboxItem(inboxItem.id, {
@@ -121,6 +154,46 @@ export async function POST(request: NextRequest) {
           send(encoder.encode(
             `data: ${JSON.stringify({ type: "task_created", task })}\n\n`
           ));
+        }
+
+        // Try to extract task updates and apply them
+        const taskUpdates = extractTaskUpdates(fullResponse);
+        for (const update of taskUpdates) {
+          const existing = getTaskById(update.taskId);
+          if (!existing) continue;
+
+          // Resolve project for update
+          let projectId: string | null | undefined;
+          if (update.projectSuggestion) {
+            const match = projects.find(
+              (p) =>
+                p.name.toLowerCase() ===
+                update.projectSuggestion!.toLowerCase()
+            );
+            if (match) {
+              projectId = match.id;
+            } else {
+              const newProject = createProject({
+                name: update.projectSuggestion,
+              });
+              projectId = newProject.id;
+            }
+          }
+
+          const changes: Record<string, unknown> = {};
+          if (update.title) changes.title = update.title;
+          if (update.priority) changes.priority = update.priority;
+          if (update.status) changes.status = update.status;
+          if (update.dueDate) changes.dueDate = update.dueDate;
+          if (update.contextTags) changes.contextTags = update.contextTags;
+          if (projectId !== undefined) changes.projectId = projectId;
+
+          if (Object.keys(changes).length > 0) {
+            const updated = updateTask(update.taskId, changes as Parameters<typeof updateTask>[1]);
+            send(encoder.encode(
+              `data: ${JSON.stringify({ type: "task_updated", task: updated })}\n\n`
+            ));
+          }
         }
 
         send(encoder.encode("data: [DONE]\n\n"));

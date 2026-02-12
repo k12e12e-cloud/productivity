@@ -24,7 +24,7 @@ export function InboxView() {
       </div>
 
       {/* Processed items sidebar */}
-      <div className="hidden w-80 border-l border-border lg:block">
+      <div className="hidden w-80 shrink-0 border-l border-border lg:flex lg:flex-col overflow-hidden">
         <ProcessedItems />
       </div>
     </div>

@@ -29,19 +29,19 @@ export function ProcessedItems() {
             (items ?? []).map((item) => (
               <div
                 key={item.id}
-                className="rounded-md border border-border p-3 text-sm space-y-1"
+                className="rounded-md border border-border p-3 text-sm space-y-1 overflow-hidden"
               >
-                <p className="text-muted-foreground line-clamp-2">
+                <p className="text-muted-foreground line-clamp-2 break-words">
                   {item.rawInput}
                 </p>
                 {item.classificationResult && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <PriorityBadge
                       priority={
                         (item.classificationResult as { priority: "P0" | "P1" | "P2" }).priority
                       }
                     />
-                    <span className="truncate">
+                    <span className="truncate min-w-0">
                       {(item.classificationResult as { title: string }).title}
                     </span>
                     {item.taskId ? (
@@ -53,7 +53,7 @@ export function ProcessedItems() {
                         <ArrowRight className="h-3.5 w-3.5" />
                       </Link>
                     ) : (
-                      <span className="ml-auto text-[10px] text-muted-foreground/50">삭제됨</span>
+                      <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/50">삭제됨</span>
                     )}
                   </div>
                 )}

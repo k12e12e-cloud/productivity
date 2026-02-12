@@ -82,6 +82,14 @@ export const timeBlocks = sqliteTable("time_blocks", {
   index("idx_timeblocks_date_start").on(t.date, t.startTime),
 ]);
 
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
 export const chatMessages = sqliteTable("chat_messages", {
   id: text("id").primaryKey(),
   role: text("role", { enum: ["user", "assistant"] }).notNull(),

@@ -1,6 +1,6 @@
 "use client";
 
-import useSWR from "swr";
+import useSWR, { mutate as globalMutate } from "swr";
 import { useState, useCallback } from "react";
 import type { ChatMessage } from "@/types";
 
@@ -63,6 +63,10 @@ export function useChat() {
                 if (parsed.type === "text_delta") {
                   accumulated += parsed.text;
                   setStreamingContent(accumulated);
+                } else if (parsed.type === "task_created" || parsed.type === "task_updated") {
+                  // Revalidate tasks & projects so board/dashboard update immediately
+                  globalMutate("/api/tasks");
+                  globalMutate("/api/projects");
                 }
               } catch {
                 // skip non-JSON lines

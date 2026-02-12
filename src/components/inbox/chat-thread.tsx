@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useChat } from "@/hooks/use-chat";
 import { cn } from "@/lib/utils";
-import { Code } from "lucide-react";
+import { Code, Zap } from "lucide-react";
 
 const JSON_BLOCK_RE = /```json\s*[\s\S]*?```/g;
 
@@ -15,34 +15,85 @@ function splitJsonBlocks(text: string) {
   return { visible, json: match.join("\n") };
 }
 
-function AssistantMessage({ content }: { content: string }) {
+// Claude Sonnet 4.5 pricing on OpenRouter ($/M tokens)
+const INPUT_COST_PER_M = 3;
+const OUTPUT_COST_PER_M = 15;
+
+function formatCost(prompt: number, completion: number) {
+  const cost =
+    (prompt * INPUT_COST_PER_M + completion * OUTPUT_COST_PER_M) / 1_000_000;
+  return cost < 0.01
+    ? `$${cost.toFixed(4)}`
+    : `$${cost.toFixed(3)}`;
+}
+
+interface AssistantMessageProps {
+  content: string;
+  metadata: Record<string, unknown> | null;
+}
+
+function AssistantMessage({ content, metadata }: AssistantMessageProps) {
   const { visible, json } = splitJsonBlocks(content);
   const [showJson, setShowJson] = useState(false);
+  const [showUsage, setShowUsage] = useState(false);
+
+  const usage = (metadata?.usage as { prompt_tokens: number; completion_tokens: number } | undefined) ?? null;
 
   return (
     <div className="mr-8">
       <div className="rounded-lg bg-muted px-3 py-2 text-sm leading-relaxed">
         <div className="whitespace-pre-wrap">{visible}</div>
       </div>
-      {json && (
-        <div className="mt-1 ml-1">
-          <button
-            onClick={() => setShowJson((v) => !v)}
-            className={cn(
-              "flex items-center gap-1 text-[10px] transition-colors",
-              showJson
-                ? "text-muted-foreground"
-                : "text-muted-foreground/40 hover:text-muted-foreground"
-            )}
-          >
-            <Code className="h-3 w-3" />
-            <span>{showJson ? "분류 정보 숨기기" : "분류 정보"}</span>
-          </button>
-          {showJson && (
-            <pre className="mt-1 rounded border border-border bg-card p-2 text-[11px] text-muted-foreground overflow-x-auto">
-              {json.replace(/```json\n?/g, "").replace(/```/g, "").trim()}
-            </pre>
-          )}
+      <div className="mt-1 ml-1 flex items-center gap-3">
+        {json && (
+          <div>
+            <button
+              onClick={() => setShowJson((v) => !v)}
+              className={cn(
+                "flex items-center gap-1 text-[10px] transition-colors",
+                showJson
+                  ? "text-muted-foreground"
+                  : "text-muted-foreground/40 hover:text-muted-foreground"
+              )}
+            >
+              <Code className="h-3 w-3" />
+              <span>{showJson ? "분류 정보 숨기기" : "분류 정보"}</span>
+            </button>
+          </div>
+        )}
+        {usage && (
+          <div>
+            <button
+              onClick={() => setShowUsage((v) => !v)}
+              className={cn(
+                "flex items-center gap-1 text-[10px] transition-colors",
+                showUsage
+                  ? "text-muted-foreground"
+                  : "text-muted-foreground/40 hover:text-muted-foreground"
+              )}
+            >
+              <Zap className="h-3 w-3" />
+              <span>
+                {showUsage
+                  ? "사용량 숨기기"
+                  : formatCost(usage.prompt_tokens, usage.completion_tokens)}
+              </span>
+            </button>
+          </div>
+        )}
+      </div>
+      {showJson && json && (
+        <pre className="mt-1 ml-1 rounded border border-border bg-card p-2 text-[11px] text-muted-foreground overflow-x-auto">
+          {json.replace(/```json\n?/g, "").replace(/```/g, "").trim()}
+        </pre>
+      )}
+      {showUsage && usage && (
+        <div className="mt-1 ml-1 rounded border border-border bg-card p-2 text-[11px] text-muted-foreground">
+          <span>입력: {usage.prompt_tokens.toLocaleString()}토큰</span>
+          <span className="mx-2">|</span>
+          <span>출력: {usage.completion_tokens.toLocaleString()}토큰</span>
+          <span className="mx-2">|</span>
+          <span>비용: {formatCost(usage.prompt_tokens, usage.completion_tokens)}</span>
         </div>
       )}
     </div>
@@ -73,7 +124,7 @@ export function ChatThread() {
 
         {messages.map((msg) =>
           msg.role === "assistant" ? (
-            <AssistantMessage key={msg.id} content={msg.content} />
+            <AssistantMessage key={msg.id} content={msg.content} metadata={msg.metadata} />
           ) : (
             <div
               key={msg.id}
