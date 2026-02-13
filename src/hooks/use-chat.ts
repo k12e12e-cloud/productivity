@@ -67,6 +67,9 @@ export function useChat() {
                   // Revalidate tasks & projects so board/dashboard update immediately
                   globalMutate("/api/tasks");
                   globalMutate("/api/projects");
+                } else if (parsed.type === "knowledge_created" || parsed.type === "knowledge_updated") {
+                  // Revalidate knowledge so knowledge page updates immediately
+                  globalMutate((key: string) => typeof key === "string" && key.startsWith("/api/knowledge"), undefined, { revalidate: true });
                 }
               } catch {
                 // skip non-JSON lines

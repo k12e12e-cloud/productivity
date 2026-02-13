@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { chatStream } from "@/lib/anthropic";
 import { buildClassifyPrompt } from "@/lib/prompts";
-import { extractClassification, extractTaskUpdates } from "@/lib/classify";
+import { extractClassification, extractTaskUpdates, extractKnowledgeActions } from "@/lib/classify";
 import { getChatMessages, createChatMessage } from "@/db/queries/chat";
 import { createTask, getAllTasks, updateTask, getTaskById } from "@/db/queries/tasks";
 import { createInboxItem, updateInboxItem } from "@/db/queries/inbox";
 import { getAllProjects, createProject } from "@/db/queries/projects";
+import { getRecentKnowledge, createKnowledge, updateKnowledge, getKnowledgeById } from "@/db/queries/knowledge";
 
 export async function GET() {
   try {
@@ -62,10 +63,11 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // Build prompt with existing projects and tasks
+        // Build prompt with existing projects, tasks, and knowledge
         const projects = getAllProjects();
         const activeTasks = getAllTasks().filter((t) => t.status !== "DONE");
-        const systemPrompt = buildClassifyPrompt(projects, activeTasks);
+        const recentKnowledgeEntries = getRecentKnowledge(20);
+        const systemPrompt = buildClassifyPrompt(projects, activeTasks, recentKnowledgeEntries);
 
         const body = await chatStream(systemPrompt, conversationHistory);
         const reader = body.getReader();
@@ -193,6 +195,34 @@ export async function POST(request: NextRequest) {
             send(encoder.encode(
               `data: ${JSON.stringify({ type: "task_updated", task: updated })}\n\n`
             ));
+          }
+        }
+
+        // Try to extract knowledge actions and apply them
+        const knowledgeActions = extractKnowledgeActions(fullResponse);
+        for (const ka of knowledgeActions) {
+          if (ka.action === "create") {
+            const entry = createKnowledge({
+              title: ka.title,
+              content: ka.content,
+              tags: ka.tags,
+              source: "ai-chat",
+            });
+            send(encoder.encode(
+              `data: ${JSON.stringify({ type: "knowledge_created", entry })}\n\n`
+            ));
+          } else if (ka.action === "update" && ka.id) {
+            const existing = getKnowledgeById(ka.id);
+            if (existing) {
+              const changes: Partial<{ title: string; content: string; tags: string[] }> = {};
+              if (ka.title) changes.title = ka.title;
+              if (ka.content) changes.content = ka.content;
+              if (ka.tags.length > 0) changes.tags = ka.tags;
+              const updated = updateKnowledge(ka.id, changes);
+              send(encoder.encode(
+                `data: ${JSON.stringify({ type: "knowledge_updated", entry: updated })}\n\n`
+              ));
+            }
           }
         }
 

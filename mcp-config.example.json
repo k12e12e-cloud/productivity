@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "productivity-knowledge": {
+      "command": "npx",
+      "args": ["tsx", "src/mcp-server/index.ts", "--stdio"],
+      "cwd": "/path/to/productivity-app"
+    }
+  }
+}

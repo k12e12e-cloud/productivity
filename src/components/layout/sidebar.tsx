@@ -9,6 +9,7 @@ import {
   Inbox,
   Kanban,
   Clock,
+  BookOpen,
   Sun,
   Moon,
   Settings,
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/inbox", label: "인박스", icon: Inbox },
   { href: "/board", label: "보드", icon: Kanban },
   { href: "/schedule", label: "스케줄", icon: Clock },
+  { href: "/knowledge", label: "지식베이스", icon: BookOpen },
 ];
 
 export function Sidebar() {

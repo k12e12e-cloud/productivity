@@ -1,13 +1,56 @@
-import type { ClassificationResult, TaskUpdateAction } from "@/types";
+import type { ClassificationResult, TaskUpdateAction, KnowledgeAction } from "@/types";
 
 function parseJsonBlock(text: string): Record<string, unknown> | null {
-  const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
-  if (!jsonMatch) return null;
-  try {
-    return JSON.parse(jsonMatch[1].trim());
-  } catch {
-    return null;
+  const startIdx = text.indexOf("```json");
+  if (startIdx === -1) return null;
+
+  const lineStart = text.indexOf("\n", startIdx);
+  if (lineStart === -1) return null;
+
+  // Find the opening { after ```json
+  const braceStart = text.indexOf("{", lineStart);
+  if (braceStart === -1) return null;
+
+  // Use brace-counting to find the matching closing }, ignoring nested code blocks in strings
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = braceStart; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escape) {
+      escape = false;
+      continue;
+    }
+
+    if (ch === "\\") {
+      if (inString) escape = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        const candidate = text.slice(braceStart, i + 1);
+        try {
+          return JSON.parse(candidate);
+        } catch {
+          return null;
+        }
+      }
+    }
   }
+
+  return null;
 }
 
 export function extractClassification(
@@ -66,6 +109,37 @@ export function extractTaskUpdates(text: string): TaskUpdateAction[] {
     });
 }
 
+export function extractKnowledgeActions(text: string): KnowledgeAction[] {
+  const parsed = parseJsonBlock(text);
+  if (!parsed) return [];
+
+  const actions = parsed.knowledgeActions;
+  if (!Array.isArray(actions)) return [];
+
+  return actions
+    .filter((a: unknown) => {
+      const item = a as Record<string, unknown>;
+      if (!item) return false;
+      if (item.action === "create") {
+        return typeof item.title === "string" && typeof item.content === "string";
+      }
+      if (item.action === "update") {
+        return typeof item.id === "string" && (typeof item.title === "string" || typeof item.content === "string");
+      }
+      return false;
+    })
+    .map((a: unknown) => {
+      const item = a as Record<string, unknown>;
+      return {
+        action: item.action as "create" | "update",
+        id: typeof item.id === "string" ? item.id : undefined,
+        title: (item.title as string) ?? "",
+        content: (item.content as string) ?? "",
+        tags: Array.isArray(item.tags) ? (item.tags as string[]) : [],
+      };
+    });
+}
+
 export function extractSchedule(
   text: string
 ): Array<{
@@ -75,13 +149,7 @@ export function extractSchedule(
   blockType: "deep" | "shallow" | "break";
   label: string;
 }> | null {
-  const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
-  if (!jsonMatch) return null;
-
-  try {
-    const parsed = JSON.parse(jsonMatch[1].trim());
-    return parsed.timeBlocks ?? null;
-  } catch {
-    return null;
-  }
+  const parsed = parseJsonBlock(text);
+  if (!parsed) return null;
+  return (parsed.timeBlocks as ReturnType<typeof extractSchedule>) ?? null;
 }

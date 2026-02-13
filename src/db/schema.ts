@@ -90,6 +90,28 @@ export const settings = sqliteTable("settings", {
     .$defaultFn(() => new Date().toISOString()),
 });
 
+export const knowledgeEntries = sqliteTable("knowledge_entries", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  tags: text("tags", { mode: "json" })
+    .notNull()
+    .$type<string[]>()
+    .default([]),
+  source: text("source", { enum: ["manual", "ai-chat", "import"] })
+    .notNull()
+    .default("manual"),
+  createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+  updatedAt: text("updated_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+}, (t) => [
+  index("idx_knowledge_updated").on(t.updatedAt),
+  index("idx_knowledge_source").on(t.source),
+]);
+
 export const chatMessages = sqliteTable("chat_messages", {
   id: text("id").primaryKey(),
   role: text("role", { enum: ["user", "assistant"] }).notNull(),

@@ -20,3 +20,9 @@ export const BLOCK_TYPE_LABELS: Record<string, string> = {
 };
 
 export const KANBAN_COLUMNS = ["BACKLOG", "TODAY", "IN_PROGRESS", "DONE"] as const;
+
+export const KNOWLEDGE_SOURCE_LABELS: Record<string, string> = {
+  manual: "직접 작성",
+  "ai-chat": "AI 대화",
+  import: "가져오기",
+};

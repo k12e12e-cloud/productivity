@@ -1,3 +1,5 @@
+export type KnowledgeSource = "manual" | "ai-chat" | "import";
+
 export type Priority = "P0" | "P1" | "P2";
 export type TaskStatus = "BACKLOG" | "TODAY" | "IN_PROGRESS" | "DONE";
 export type BlockType = "deep" | "shallow" | "break";
@@ -70,6 +72,24 @@ export interface TimeBlock {
   label: string;
   sortOrder: number;
   createdAt: string;
+}
+
+export interface KnowledgeEntry {
+  id: string;
+  title: string;
+  content: string;
+  tags: string[];
+  source: KnowledgeSource;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface KnowledgeAction {
+  action: "create" | "update";
+  id?: string;
+  title: string;
+  content: string;
+  tags: string[];
 }
 
 export interface ChatMessage {
